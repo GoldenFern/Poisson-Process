@@ -68,21 +68,46 @@ export function createArrivalChart(canvas) {
   });
 }
 
-export function updatePathChart(chart, stepPoints, expectedPath) {
-  const sortedStep = [...stepPoints].sort((a, b) => a.t - b.t);
+export function startPathPlayback(chart, expectedPath, horizonT) {
   const sortedExpected = [...expectedPath].sort((a, b) => a.t - b.t);
   const xMax = sortedExpected.length > 0 ? sortedExpected[sortedExpected.length - 1].t : 1;
-  const yMax = Math.max(
-    sortedStep.length > 0 ? sortedStep[sortedStep.length - 1].n : 0,
-    sortedExpected.length > 0 ? sortedExpected[sortedExpected.length - 1].expected_n : 0
-  );
+  const yMax = sortedExpected.length > 0 ? sortedExpected[sortedExpected.length - 1].expected_n : 0;
 
-  chart.data.datasets[0].data = sortedStep.map((p) => ({ x: p.t, y: p.n }));
+  chart.data.datasets[0].data = [{ x: 0, y: 0 }];
   chart.data.datasets[1].data = sortedExpected.map((p) => ({ x: p.t, y: p.expected_n }));
   chart.options.scales.x.min = 0;
-  chart.options.scales.x.max = xMax;
+  chart.options.scales.x.max = Math.max(horizonT, xMax);
   chart.options.scales.y.suggestedMax = Math.ceil(yMax + 1);
-  chart.update();
+  chart.update("none");
+}
+
+export function updatePathPlayback(chart, committedStepPoints, currentT, currentCount, horizonT, expectedPath) {
+  const sortedStep = [...committedStepPoints].sort((a, b) => a.t - b.t);
+  const sortedExpected = [...expectedPath].sort((a, b) => a.t - b.t);
+  const currentPoint = { x: Math.min(currentT, horizonT), y: currentCount };
+  const expectedMax = sortedExpected.length > 0 ? sortedExpected[sortedExpected.length - 1].expected_n : 0;
+  const yMax = Math.max(currentCount, expectedMax);
+
+  chart.data.datasets[0].data = [...sortedStep.map((p) => ({ x: p.t, y: p.n })), currentPoint];
+  chart.data.datasets[1].data = sortedExpected.map((p) => ({ x: p.t, y: p.expected_n }));
+  chart.options.scales.x.min = 0;
+  chart.options.scales.x.max = Math.max(horizonT, currentT);
+  chart.options.scales.y.suggestedMax = Math.ceil(yMax + 1);
+  chart.update("none");
+}
+
+export function finishPathPlayback(chart, committedStepPoints, horizonT, finalCount, expectedPath) {
+  const sortedExpected = [...expectedPath].sort((a, b) => a.t - b.t);
+  const expectedMax = sortedExpected.length > 0 ? sortedExpected[sortedExpected.length - 1].expected_n : 0;
+  const yMax = Math.max(finalCount, expectedMax);
+  const finalPoints = [...committedStepPoints.map((p) => ({ x: p.t, y: p.n })), { x: horizonT, y: finalCount }];
+
+  chart.data.datasets[0].data = finalPoints;
+  chart.data.datasets[1].data = sortedExpected.map((p) => ({ x: p.t, y: p.expected_n }));
+  chart.options.scales.x.min = 0;
+  chart.options.scales.x.max = horizonT;
+  chart.options.scales.y.suggestedMax = Math.ceil(yMax + 1);
+  chart.update("none");
 }
 
 export function updateHistogramChart(chart, bins) {

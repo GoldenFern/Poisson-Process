@@ -39,15 +39,41 @@
           </label>
 
           <div class="button-row">
-            <button id="simulateButton">Run Simulation</button>
+            <button id="simulateButton">Play New Path</button>
+            <button id="pauseButton" class="secondary" disabled>Pause</button>
             <button id="resetButton" class="secondary">Reset Case Defaults</button>
           </div>
+
+          <label>
+            Playback duration
+            <select id="playbackSpeed">
+              <option value="12000">Slow (12s)</option>
+              <option value="8000" selected>Balanced (8s)</option>
+              <option value="5000">Fast (5s)</option>
+            </select>
+          </label>
 
           <article id="caseDescription" class="case-description"></article>
           <article id="healthBlock" class="health-block"></article>
         </section>
 
         <section class="viz-panel">
+          <article class="scenario-card">
+            <div class="scenario-header">
+              <div>
+                <p class="eyebrow">Animated Sample Path</p>
+                <h2 id="sceneTitle">Scenario Playback</h2>
+                <p id="sceneSubtitle" class="scene-subtitle"></p>
+              </div>
+              <div class="scenario-metrics">
+                <span id="playbackStatus" class="metric-pill status-pill" data-mode="idle">Ready</span>
+                <span id="timeReadout" class="metric-pill">t = 0.000</span>
+                <span id="countReadout" class="metric-pill">0 events</span>
+              </div>
+            </div>
+            <div id="sceneStage" class="scenario-stage"></div>
+          </article>
+
           <div class="summary-cards">
             <div class="card"><span>Empirical mean</span><strong id="empMean">-</strong></div>
             <div class="card"><span>Theoretical mean</span><strong id="theoMean">-</strong></div>
