@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Poisson Process Visualizer</title>
+    <link rel="stylesheet" href="./styles/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <h1>Poisson Process Visualizer</h1>
+        <p>Interactive course demo for stochastic-process intuition and model interpretation.</p>
+      </header>
+
+      <main class="app-main">
+        <section class="control-panel">
+          <h2>Parameters</h2>
+          <label>
+            Scenario
+            <select id="caseSelect"></select>
+          </label>
+          <label>
+            Lambda (events per unit time)
+            <input id="lambdaInput" type="number" step="0.1" min="0.01" value="10" />
+          </label>
+          <label>
+            Horizon T
+            <input id="tInput" type="number" step="0.01" min="0.01" value="1" />
+          </label>
+          <label>
+            dt (expected path sampling)
+            <input id="dtInput" type="number" step="0.001" min="0.00001" value="0.01" />
+          </label>
+          <label>
+            Trials
+            <input id="trialsInput" type="number" step="100" min="100" max="20000" value="2000" />
+          </label>
+          <label>
+            Seed
+            <input id="seedInput" type="number" step="1" value="2026" />
+          </label>
+
+          <div class="button-row">
+            <button id="simulateButton">Run Simulation</button>
+            <button id="resetButton" class="secondary">Reset Case Defaults</button>
+          </div>
+
+          <article id="caseDescription" class="case-description"></article>
+          <article id="healthBlock" class="health-block"></article>
+        </section>
+
+        <section class="viz-panel">
+          <div class="summary-cards">
+            <div class="card"><span>Empirical mean</span><strong id="empMean">-</strong></div>
+            <div class="card"><span>Theoretical mean</span><strong id="theoMean">-</strong></div>
+            <div class="card"><span>Empirical variance</span><strong id="empVar">-</strong></div>
+            <div class="card"><span>Theoretical variance</span><strong id="theoVar">-</strong></div>
+          </div>
+
+          <div class="chart-grid">
+            <article class="chart-card">
+              <h3>Sample Path N(t)</h3>
+              <canvas id="pathChart"></canvas>
+            </article>
+            <article class="chart-card">
+              <h3>Count Histogram vs Poisson PMF</h3>
+              <canvas id="histChart"></canvas>
+            </article>
+            <article class="chart-card">
+              <h3>Inter-arrival Distribution</h3>
+              <canvas id="arrivalChart"></canvas>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./scripts/app.js"></script>
+  </body>
+</html>
