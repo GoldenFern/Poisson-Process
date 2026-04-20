@@ -70,7 +70,8 @@ SimulationResult run_simulation(const SimulationRequest& req) {
     throw std::invalid_argument("trials must be in [1, 20000].");
   }
 
-  std::mt19937 rng(static_cast<std::mt19937::result_type>(req.seed));
+  std::random_device rd;
+  std::mt19937 rng(rd());
   SimulationResult result;
 
   result.single_path = simulate_single_path_exponential(req.lambda, req.horizon_t, rng);

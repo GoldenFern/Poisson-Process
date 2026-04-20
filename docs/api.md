@@ -72,10 +72,11 @@ Runs Poisson process simulation and returns visualization-ready arrays.
   "lambda": 18.0,
   "T": 0.3333,
   "dt": 0.002,
-  "seed": 2026,
   "trials": 2000
 }
 ```
+
+`seed` is intentionally not exposed in this teaching UI/API path; each run is randomized automatically.
 
 ### Parameter constraints
 

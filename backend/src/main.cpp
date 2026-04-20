@@ -92,7 +92,6 @@ int main() {
           body.at("lambda").get<double>(),
           body.at("T").get<double>(),
           body.value("dt", 0.01),
-          body.value("seed", 2026),
           body.value("trials", 2000),
       };
 
@@ -115,7 +114,6 @@ int main() {
                     {{"lambda", sim_req.lambda},
                      {"T", sim_req.horizon_t},
                      {"dt", sim_req.dt},
-                     {"seed", sim_req.seed},
                      {"trials", sim_req.trials}}},
                    {"single_path", to_json_single_path(sim.single_path)},
                    {"histogram", to_json_histogram(sim.histogram)},

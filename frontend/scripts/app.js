@@ -15,7 +15,6 @@ const ui = {
   tInput: document.getElementById("tInput"),
   dtInput: document.getElementById("dtInput"),
   trialsInput: document.getElementById("trialsInput"),
-  seedInput: document.getElementById("seedInput"),
   simulateButton: document.getElementById("simulateButton"),
   resetButton: document.getElementById("resetButton"),
   caseDescription: document.getElementById("caseDescription"),
@@ -48,7 +47,6 @@ function getRequestPayload() {
     T: Number(ui.tInput.value),
     dt: Number(ui.dtInput.value),
     trials: Number(ui.trialsInput.value),
-    seed: Number(ui.seedInput.value),
   };
 }
 

@@ -8,7 +8,6 @@ struct SimulationRequest {
   double lambda;
   double horizon_t;
   double dt;
-  int seed;
   int trials;
 };
 
