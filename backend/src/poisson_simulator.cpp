@@ -109,11 +109,14 @@ SimulationResult run_simulation(const SimulationRequest& req) {
 
   const int k_max = std::max(max_count, static_cast<int>(std::ceil(mu + 4.0 * std::sqrt(mu))) + 2);
   result.histogram.reserve(static_cast<size_t>(k_max + 1));
+
+  // Use recursive PMF update to avoid overflow/underflow issues from mu^k/k! at large k.
+  double theoretical_pmf = std::exp(-mu);
   for (int k = 0; k <= k_max; ++k) {
     const int count = freq.count(k) ? freq[k] : 0;
     const double empirical = static_cast<double>(count) / static_cast<double>(req.trials);
-    const double theoretical = std::exp(-mu) * std::pow(mu, k) / std::tgamma(static_cast<double>(k + 1));
-    result.histogram.push_back({k, empirical, theoretical});
+    result.histogram.push_back({k, empirical, theoretical_pmf});
+    theoretical_pmf *= mu / static_cast<double>(k + 1);
   }
 
   for (double t = 0.0; t <= req.horizon_t + 1e-12; t += req.dt) {

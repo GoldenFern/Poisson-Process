@@ -10,10 +10,8 @@ if (-not (Test-Path $vsDevCmd)) {
 $backendCommand = @"
 cd /d "$projectRoot"
 call "$vsDevCmd" -host_arch=x64 -arch=x64
-if not exist "backend\build\poisson_server.exe" (
-  cmake -S backend -B backend/build -G "NMake Makefiles"
-  cmake --build backend/build
-)
+cmake -S backend -B backend/build -G "NMake Makefiles"
+cmake --build backend/build
 backend\build\poisson_server.exe
 "@
 
