@@ -20,7 +20,23 @@ export function createPathChart(canvas) {
         { label: "Expected E[N(t)]=lambda t", data: [], borderColor: "#818cf8", pointRadius: 0, borderDash: [6, 4] },
       ],
     },
-    options: commonOptions,
+    options: {
+      ...commonOptions,
+      scales: {
+        x: {
+          type: "linear",
+          ticks: { color: "#94a3b8" },
+          grid: { color: "rgba(148,163,184,0.15)" },
+          title: { display: true, text: "t", color: "#94a3b8" },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: "#94a3b8", precision: 0 },
+          grid: { color: "rgba(148,163,184,0.15)" },
+          title: { display: true, text: "N(t)", color: "#94a3b8" },
+        },
+      },
+    },
   });
 }
 
@@ -53,8 +69,19 @@ export function createArrivalChart(canvas) {
 }
 
 export function updatePathChart(chart, stepPoints, expectedPath) {
-  chart.data.datasets[0].data = stepPoints.map((p) => ({ x: p.t, y: p.n }));
-  chart.data.datasets[1].data = expectedPath.map((p) => ({ x: p.t, y: p.expected_n }));
+  const sortedStep = [...stepPoints].sort((a, b) => a.t - b.t);
+  const sortedExpected = [...expectedPath].sort((a, b) => a.t - b.t);
+  const xMax = sortedExpected.length > 0 ? sortedExpected[sortedExpected.length - 1].t : 1;
+  const yMax = Math.max(
+    sortedStep.length > 0 ? sortedStep[sortedStep.length - 1].n : 0,
+    sortedExpected.length > 0 ? sortedExpected[sortedExpected.length - 1].expected_n : 0
+  );
+
+  chart.data.datasets[0].data = sortedStep.map((p) => ({ x: p.t, y: p.n }));
+  chart.data.datasets[1].data = sortedExpected.map((p) => ({ x: p.t, y: p.expected_n }));
+  chart.options.scales.x.min = 0;
+  chart.options.scales.x.max = xMax;
+  chart.options.scales.y.suggestedMax = Math.ceil(yMax + 1);
   chart.update();
 }
 
