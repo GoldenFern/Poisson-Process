@@ -96,6 +96,13 @@
                     <option value="6000">Fast (6s)</option>
                   </select>
                 </label>
+                <label id="spatialDimensionRow" hidden>
+                  <span>Spatial dimension</span>
+                  <select id="spatialDimension">
+                    <option value="2">2D window</option>
+                    <option value="3">3D volume</option>
+                  </select>
+                </label>
               </div>
 
               <div class="button-row controls-actions">
@@ -103,6 +110,47 @@
                 <button id="pauseButton" class="secondary" type="button" disabled>Pause</button>
                 <button id="resetButton" class="secondary" type="button">Reset Case</button>
               </div>
+            </section>
+
+            <section id="profileCard" class="panel-card profile-card" hidden>
+              <div class="profile-head">
+                <div>
+                  <p class="eyebrow">Custom Profile</p>
+                  <h2 id="profileTitle">Profile Editor</h2>
+                </div>
+                <p id="profileHint" class="profile-hint"></p>
+              </div>
+
+              <div class="profile-grid">
+                <label>
+                  <span>Profile mode</span>
+                  <select id="profileMode">
+                    <option value="preset">Preset</option>
+                    <option value="formula">Formula</option>
+                    <option value="draw">Draw</option>
+                  </select>
+                </label>
+
+                <label id="profileRangeRow" hidden>
+                  <span id="profileRangeLabel">Profile x max</span>
+                  <input id="profileXMax" type="number" min="0.1" step="0.1" value="10" />
+                </label>
+
+                <label id="profileFormulaRow" class="profile-formula">
+                  <span>Formula</span>
+                  <textarea id="profileFormula" rows="3"></textarea>
+                </label>
+              </div>
+
+              <div class="profile-actions">
+                <button id="profileResetButton" class="secondary" type="button">Reset Profile</button>
+                <button id="profileClearButton" class="secondary" type="button">Clear Drawing</button>
+              </div>
+
+              <div class="profile-preview">
+                <canvas id="profileCanvas"></canvas>
+              </div>
+              <p id="profileHelp" class="profile-help"></p>
             </section>
 
             <article class="hero-card">

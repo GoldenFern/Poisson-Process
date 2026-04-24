@@ -5,17 +5,25 @@
 #include <string>
 #include <vector>
 
+struct PlotPoint {
+  double x;
+  double y;
+};
+
+struct SpatialPoint {
+  double x;
+  double y;
+  double z;
+};
+
 struct SimulationRequest {
   std::string case_id;
   double lambda;
   double horizon_t;
   double dt;
   int trials;
-};
-
-struct PlotPoint {
-  double x;
-  double y;
+  std::vector<PlotPoint> custom_profile;
+  int spatial_dimension;
 };
 
 struct HistogramBin {
@@ -39,7 +47,7 @@ struct SimulationResult {
   std::string diagnostic_mode;
   std::vector<PlotPoint> primary_path;
   std::vector<PlotPoint> benchmark_path;
-  std::vector<PlotPoint> spatial_points;
+  std::vector<SpatialPoint> spatial_points;
   std::vector<double> event_times;
   std::vector<double> event_marks;
   std::vector<int> trial_counts;

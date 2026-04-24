@@ -20,6 +20,7 @@ export const CASE_CONTENT = {
     distributionYLabel: "probability",
     diagnosticXLabel: "waiting time",
     diagnosticYLabel: "density",
+    supportsCustomProfile: false,
     mathSnippet: `
       <p>The defining identities are \\(N(0)=0\\), independent stationary increments, and</p>
       <div class="formula-block">\\[
@@ -50,6 +51,15 @@ export const CASE_CONTENT = {
     distributionYLabel: "probability",
     diagnosticXLabel: "time t",
     diagnosticYLabel: "instantaneous intensity",
+    supportsCustomProfile: true,
+    profileTitle: "Intensity Profile Editor",
+    profileHint:
+      "Define a nonnegative weight function w(t). The simulator uses lambda(t) = lambda * w(t), so lambda remains a global scale while the profile controls the shape.",
+    profileFormulaPlaceholder: "0.6 + 1.2 * exp(-((t - 0.45*T)/(0.14*T))^2)",
+    profileFormulaHelp: "Variables: t, T, lambda, u=t/T, pi, and standard Math functions such as sin, cos, exp, sqrt, log, min, max.",
+    profileXLabel: "time t",
+    profileYLabel: "relative weight",
+    drawYMax: 2.5,
     mathSnippet: `
       <p>For a deterministic intensity profile \\(\\lambda(t)\\), the compensator is</p>
       <div class="formula-block">\\[
@@ -80,6 +90,17 @@ export const CASE_CONTENT = {
     distributionYLabel: "density",
     diagnosticXLabel: "jump size",
     diagnosticYLabel: "density",
+    supportsCustomProfile: true,
+    profileTitle: "Jump-size Density Editor",
+    profileHint:
+      "Define an unnormalized nonnegative shape for the jump-size density. The backend automatically normalizes the area to one before sampling marks.",
+    profileFormulaPlaceholder: "x^1.5 * exp(-x / 1.2)",
+    profileFormulaHelp: "Variables: x, lambda, T, pi, and standard Math functions. The curve is interpreted on [0, x_max].",
+    profileRangeLabel: "Jump-size x max",
+    profileXLabel: "jump size x",
+    profileYLabel: "relative density height",
+    defaultProfileXMax: 12,
+    drawYMax: 1,
     mathSnippet: `
       <p>The marked process is defined by</p>
       <div class="formula-block">\\[
@@ -112,6 +133,17 @@ export const CASE_CONTENT = {
     distributionYLabel: "probability",
     diagnosticXLabel: "latent intensity",
     diagnosticYLabel: "density",
+    supportsCustomProfile: true,
+    profileTitle: "Mixing Density Editor",
+    profileHint:
+      "Define an unnormalized density for the latent rate Lambda. The simulator normalizes the shape and samples one latent rate per path.",
+    profileFormulaPlaceholder: "exp(-((x - lambda)^2) / (2 * (0.35 * lambda)^2))",
+    profileFormulaHelp: "Variables: x, lambda, T, pi, and standard Math functions. The curve is interpreted on [0, x_max].",
+    profileRangeLabel: "Latent-rate x max",
+    profileXLabel: "latent rate x",
+    profileYLabel: "relative density height",
+    defaultProfileXMax: 24,
+    drawYMax: 1,
     mathSnippet: `
       <p>Conditionally on a latent rate \\(\\Lambda\\), the process is Poisson:</p>
       <div class="formula-block">\\[
@@ -142,6 +174,8 @@ export const CASE_CONTENT = {
     distributionYLabel: "probability",
     diagnosticXLabel: "total count",
     diagnosticYLabel: "probability",
+    supportsCustomProfile: false,
+    supportsSpatialDimension: true,
     mathSnippet: `
       <p>For any measurable region \\(B\\subseteq A\\), the count law is</p>
       <div class="formula-block">\\[

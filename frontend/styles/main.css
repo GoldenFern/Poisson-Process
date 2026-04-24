@@ -306,6 +306,77 @@ button:disabled {
   background: rgba(255, 255, 255, 0.72);
 }
 
+.profile-card {
+  padding: 1.05rem 1.1rem;
+}
+
+.profile-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.profile-hint,
+.profile-help {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.profile-hint {
+  max-width: 44rem;
+  margin: 0;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(180px, 220px) minmax(0, 1fr);
+  gap: 0.8rem;
+  margin-top: 0.85rem;
+}
+
+.profile-formula {
+  grid-column: auto;
+}
+
+.profile-formula textarea {
+  min-height: 112px;
+  resize: vertical;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  padding: 0.78rem 0.86rem;
+  font: inherit;
+}
+
+.profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.9rem;
+}
+
+.profile-preview {
+  margin-top: 0.9rem;
+  height: 240px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.82);
+  overflow: hidden;
+}
+
+#profileCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.profile-help {
+  margin: 0.75rem 0 0;
+}
+
 .formula-block {
   margin: 0.9rem 0;
   padding: 0.8rem 0.95rem;
@@ -476,11 +547,20 @@ canvas {
   .controls-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .profile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-formula {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 980px) {
   .app-header,
   .controls-head,
+  .profile-head,
   .hero-header,
   .card-head {
     flex-direction: column;
@@ -507,6 +587,14 @@ canvas {
   .health-block.compact {
     min-width: 0;
     width: 100%;
+  }
+
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-formula {
+    grid-column: auto;
   }
 }
 

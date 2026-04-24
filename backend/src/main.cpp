@@ -78,6 +78,14 @@ json to_json_points(const std::vector<PlotPoint>& points) {
   return out;
 }
 
+json to_json_spatial_points(const std::vector<SpatialPoint>& points) {
+  json out = json::array();
+  for (const auto& point : points) {
+    out.push_back({{"x", point.x}, {"y", point.y}, {"z", point.z}});
+  }
+  return out;
+}
+
 json to_json_values(const std::vector<double>& values) {
   json out = json::array();
   for (double value : values) {
@@ -116,12 +124,21 @@ json to_json_extras(const std::map<std::string, double>& extras) {
 }
 
 SimulationRequest parse_simulation_request(const json& body) {
+  std::vector<PlotPoint> custom_profile;
+  if (body.contains("custom_profile") && body.at("custom_profile").is_array()) {
+    for (const auto& point : body.at("custom_profile")) {
+      custom_profile.push_back({point.at("x").get<double>(), point.at("y").get<double>()});
+    }
+  }
+
   return {
       body.at("case_id").get<std::string>(),
       body.at("lambda").get<double>(),
       body.at("T").get<double>(),
       body.value("dt", 0.01),
       body.value("trials", 2000),
+      custom_profile,
+      body.value("spatial_dimension", 2),
   };
 }
 
@@ -133,10 +150,14 @@ json to_json_simulation_result(const SimulationRequest& sim_req, const Simulatio
       {"histogram_mode", sim.histogram_mode},
       {"diagnostic_mode", sim.diagnostic_mode},
       {"parameters",
-       {{"lambda", sim_req.lambda}, {"T", sim_req.horizon_t}, {"dt", sim_req.dt}, {"trials", sim_req.trials}}},
+       {{"lambda", sim_req.lambda},
+        {"T", sim_req.horizon_t},
+        {"dt", sim_req.dt},
+        {"trials", sim_req.trials},
+        {"spatial_dimension", sim_req.spatial_dimension}}},
       {"primary_path", to_json_points(sim.primary_path)},
       {"benchmark_path", to_json_points(sim.benchmark_path)},
-      {"spatial_points", to_json_points(sim.spatial_points)},
+      {"spatial_points", to_json_spatial_points(sim.spatial_points)},
       {"event_times", to_json_values(sim.event_times)},
       {"event_marks", to_json_values(sim.event_marks)},
       {"histogram", to_json_histogram(sim.histogram)},

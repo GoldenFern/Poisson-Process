@@ -29,6 +29,13 @@ function baseOptions() {
         callbacks: {
           label(context) {
             const raw = context.raw;
+            if (raw && typeof raw === "object" && "actualX" in raw) {
+              const coords = [raw.actualX, raw.actualY];
+              if ("actualZ" in raw) {
+                coords.push(raw.actualZ);
+              }
+              return `${context.dataset.label}: (${coords.map((value) => value.toFixed(3)).join(", ")})`;
+            }
             if (raw && typeof raw === "object" && "x" in raw && "y" in raw) {
               return `${context.dataset.label}: (${raw.x.toFixed(3)}, ${raw.y.toFixed(3)})`;
             }
@@ -218,17 +225,66 @@ export function renderTemporalPrimary(chart, samplePoints, benchmarkPoints, conf
 }
 
 export function renderSpatialPrimary(chart, points, sideLength, config) {
+  const dimension = config.dimension || 2;
+  let projectedPoints = points;
+  let xTitle = "x";
+  let yTitle = "y";
+  let xMin = 0;
+  let xMax = sideLength;
+  let yMin = 0;
+  let yMax = sideLength;
+
+  if (dimension === 3) {
+    const project = (point) => {
+      const nx = point.x / Math.max(sideLength, 1e-9);
+      const ny = point.y / Math.max(sideLength, 1e-9);
+      const nz = point.z / Math.max(sideLength, 1e-9);
+      return {
+        x: (nx - ny) * 0.866,
+        y: (nx + ny) * 0.5 - nz,
+        actualX: point.x,
+        actualY: point.y,
+        actualZ: point.z,
+        depth: nz,
+      };
+    };
+
+    const cubeCorners = [
+      { x: 0, y: 0, z: 0 },
+      { x: sideLength, y: 0, z: 0 },
+      { x: 0, y: sideLength, z: 0 },
+      { x: sideLength, y: sideLength, z: 0 },
+      { x: 0, y: 0, z: sideLength },
+      { x: sideLength, y: 0, z: sideLength },
+      { x: 0, y: sideLength, z: sideLength },
+      { x: sideLength, y: sideLength, z: sideLength },
+    ].map(project);
+
+    projectedPoints = points.map(project);
+    const xValues = cubeCorners.map((point) => point.x);
+    const yValues = cubeCorners.map((point) => point.y);
+    xMin = Math.min(...xValues) - 0.08;
+    xMax = Math.max(...xValues) + 0.08;
+    yMin = Math.min(...yValues) - 0.08;
+    yMax = Math.max(...yValues) + 0.08;
+    xTitle = "isometric projection x";
+    yTitle = "isometric projection y";
+  }
+
   chart.config.type = "scatter";
   chart.data.datasets = [
     {
       type: "scatter",
       label: config.sampleLabel,
-      data: points,
+      data: projectedPoints,
       parsing: false,
-      backgroundColor: "rgba(29, 78, 216, 0.85)",
-      borderColor: "#eff6ff",
+      backgroundColor: dimension === 3 ? (context) => {
+        const depth = context.raw?.depth ?? 0.5;
+        return `rgba(29, 78, 216, ${0.45 + depth * 0.45})`;
+      } : "rgba(29, 78, 216, 0.85)",
+      borderColor: dimension === 3 ? "#dbeafe" : "#eff6ff",
       borderWidth: 0.75,
-      pointRadius: 4.2,
+      pointRadius: dimension === 3 ? (context) => 2.8 + (context.raw?.depth ?? 0.5) * 2.8 : 4.2,
       pointHoverRadius: 5.2,
     },
   ];
@@ -238,31 +294,31 @@ export function renderSpatialPrimary(chart, points, sideLength, config) {
     scales: {
       x: {
         type: "linear",
-        min: 0,
-        max: sideLength,
+        min: xMin,
+        max: xMax,
         ticks: {
           color: palette.text,
-          stepSize: sideLength / 4,
+          stepSize: dimension === 3 ? undefined : sideLength / 4,
         },
         grid: { color: palette.grid },
         title: {
           display: true,
-          text: "x",
+          text: xTitle,
           color: palette.text,
         },
       },
       y: {
         type: "linear",
-        min: 0,
-        max: sideLength,
+        min: yMin,
+        max: yMax,
         ticks: {
           color: palette.text,
-          stepSize: sideLength / 4,
+          stepSize: dimension === 3 ? undefined : sideLength / 4,
         },
         grid: { color: palette.grid },
         title: {
           display: true,
-          text: "y",
+          text: yTitle,
           color: palette.text,
         },
       },
