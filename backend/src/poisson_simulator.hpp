@@ -1,40 +1,56 @@
 #pragma once
 
+#include <map>
 #include <random>
-#include <utility>
+#include <string>
 #include <vector>
 
 struct SimulationRequest {
+  std::string case_id;
   double lambda;
   double horizon_t;
   double dt;
   int trials;
 };
 
-struct SinglePath {
-  std::vector<double> arrival_times;
-  std::vector<std::pair<double, int>> step_points;
+struct PlotPoint {
+  double x;
+  double y;
 };
 
 struct HistogramBin {
-  int k;
+  double x;
+  std::string label;
   double empirical_prob;
   double theoretical_prob;
 };
 
-struct SimulationResult {
-  SinglePath single_path;
-  std::vector<double> inter_arrivals;
-  std::vector<int> trial_counts;
-  std::vector<HistogramBin> histogram;
-  std::vector<std::pair<double, double>> expected_path;
-  double empirical_mean_count;
-  double empirical_variance_count;
-  double theoretical_mean_count;
-  double theoretical_variance_count;
+struct SummaryMetric {
+  std::string label;
+  double empirical_value;
+  double theoretical_value;
 };
 
-SinglePath simulate_single_path_exponential(double lambda, double horizon_t, std::mt19937& rng);
+struct SimulationResult {
+  std::string case_id;
+  std::string family;
+  std::string primary_mode;
+  std::string histogram_mode;
+  std::string diagnostic_mode;
+  std::vector<PlotPoint> primary_path;
+  std::vector<PlotPoint> benchmark_path;
+  std::vector<PlotPoint> spatial_points;
+  std::vector<double> event_times;
+  std::vector<double> event_marks;
+  std::vector<int> trial_counts;
+  std::vector<double> diagnostic_samples;
+  std::vector<PlotPoint> diagnostic_curve;
+  std::vector<PlotPoint> diagnostic_markers;
+  std::vector<HistogramBin> histogram;
+  std::vector<SummaryMetric> summary_metrics;
+  std::vector<std::string> insights;
+  std::map<std::string, double> extras;
+};
 
 int sample_poisson_knuth(double mu, std::mt19937& rng);
 

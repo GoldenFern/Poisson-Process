@@ -3,98 +3,165 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Poisson Process Visualizer</title>
+    <title>Poisson Process Laboratory</title>
     <link rel="stylesheet" href="./styles/main.css" />
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [
+            ["\\(", "\\)"],
+            ["$", "$"],
+          ],
+        },
+        svg: {
+          fontCache: "global",
+        },
+      };
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
   </head>
   <body>
-    <div class="app-shell">
+    <div class="page-shell">
       <header class="app-header">
-        <h1>Poisson Process Visualizer</h1>
-        <p>Interactive course demo for stochastic-process intuition and model interpretation.</p>
+        <div>
+          <p class="eyebrow">Probability Laboratory</p>
+          <h1>Poisson Process Laboratory</h1>
+          <p class="header-copy">
+            Explore the baseline Poisson process, its principal variants, and the mathematical structures that
+            distinguish them.
+          </p>
+        </div>
+        <nav class="top-nav" aria-label="Primary views">
+          <button id="labTab" class="nav-tab is-active" type="button">Process Lab</button>
+          <button id="backgroundTab" class="nav-tab" type="button">Mathematical Background</button>
+        </nav>
       </header>
 
-      <main class="app-main">
-        <section class="control-panel">
-          <h2>Parameters</h2>
-          <label>
-            Scenario
-            <select id="caseSelect"></select>
-          </label>
-          <label>
-            Lambda (events per unit time)
-            <input id="lambdaInput" type="number" step="0.1" min="0.01" value="10" />
-          </label>
-          <label>
-            Horizon T
-            <input id="tInput" type="number" step="0.01" min="0.01" value="1" />
-          </label>
-          <label>
-            dt (expected path sampling)
-            <input id="dtInput" type="number" step="0.001" min="0.00001" value="0.01" />
-          </label>
-          <label>
-            Trials
-            <input id="trialsInput" type="number" step="100" min="100" max="20000" value="2000" />
-          </label>
+      <main>
+        <section id="labView" class="page-view is-active">
+          <aside class="control-panel">
+            <section class="panel-card">
+              <p class="eyebrow">Process Families</p>
+              <div id="caseCards" class="case-grid"></div>
+            </section>
 
-          <div class="button-row">
-            <button id="simulateButton">Play New Path</button>
-            <button id="pauseButton" class="secondary" disabled>Pause</button>
-            <button id="resetButton" class="secondary">Reset Case Defaults</button>
-          </div>
+            <section class="panel-card focus-card">
+              <span id="activeCaseLabel" class="focus-badge">Baseline Process</span>
+              <h2 id="activeCaseTitle">Poisson Process</h2>
+              <p id="activeCaseDescription"></p>
+            </section>
 
-          <label>
-            Playback duration
-            <select id="playbackSpeed">
-              <option value="12000">Slow (12s)</option>
-              <option value="8000" selected>Balanced (8s)</option>
-              <option value="5000">Fast (5s)</option>
-            </select>
-          </label>
+            <section class="panel-card">
+              <h2>Controls</h2>
+              <label>
+                <span id="lambdaLabel">Intensity lambda</span>
+                <input id="lambdaInput" type="number" min="0.01" step="0.1" value="12" />
+              </label>
+              <label>
+                <span id="horizonLabel">Horizon T</span>
+                <input id="tInput" type="number" min="0.01" step="0.01" value="1" />
+              </label>
+              <label id="dtRow">
+                <span id="dtLabel">Reference-grid dt</span>
+                <input id="dtInput" type="number" min="0.00001" step="0.001" value="0.02" />
+              </label>
+              <label>
+                <span>Monte Carlo trials</span>
+                <input id="trialsInput" type="number" min="100" max="20000" step="100" value="2000" />
+              </label>
+              <label>
+                <span>Playback duration</span>
+                <select id="playbackSpeed">
+                  <option value="12000">Slow (12s)</option>
+                  <option value="9000" selected>Balanced (9s)</option>
+                  <option value="6000">Fast (6s)</option>
+                </select>
+              </label>
+              <div class="button-row">
+                <button id="simulateButton" type="button">Generate Sample</button>
+                <button id="pauseButton" class="secondary" type="button" disabled>Pause</button>
+                <button id="resetButton" class="secondary" type="button">Reset Case</button>
+              </div>
+            </section>
 
-          <article id="caseDescription" class="case-description"></article>
-          <article id="healthBlock" class="health-block"></article>
+            <section class="panel-card">
+              <h2>Case Mathematics</h2>
+              <div id="mathSnippet" class="math-snippet"></div>
+            </section>
+
+            <section class="panel-card">
+              <h2>Backend</h2>
+              <div id="healthBlock" class="health-block"></div>
+            </section>
+          </aside>
+
+          <section class="lab-panel">
+            <article class="hero-card">
+              <div class="hero-header">
+                <div>
+                  <p class="eyebrow">Visualization</p>
+                  <h2 id="primaryTitle">Sample Path</h2>
+                </div>
+                <div class="status-row">
+                  <span id="statusPill" class="status-pill" data-mode="idle">Ready</span>
+                  <span id="progressReadout" class="metric-pill">t = 0.0000</span>
+                  <span id="valueReadout" class="metric-pill">0 events</span>
+                </div>
+              </div>
+              <div class="chart-stage">
+                <canvas id="primaryChart"></canvas>
+              </div>
+            </article>
+
+            <section class="summary-section">
+              <div id="summaryCards" class="summary-grid"></div>
+            </section>
+
+            <section class="chart-grid">
+              <article class="plot-card">
+                <div class="card-head">
+                  <p class="eyebrow">Distribution</p>
+                  <h3 id="distributionTitle">Count Distribution</h3>
+                </div>
+                <div class="plot-frame">
+                  <canvas id="distributionChart"></canvas>
+                </div>
+              </article>
+
+              <article class="plot-card">
+                <div class="card-head">
+                  <p class="eyebrow">Diagnostic</p>
+                  <h3 id="diagnosticTitle">Diagnostic Chart</h3>
+                </div>
+                <div class="plot-frame">
+                  <canvas id="diagnosticChart"></canvas>
+                </div>
+              </article>
+            </section>
+
+            <article class="insight-card">
+              <div class="card-head">
+                <p class="eyebrow">Interpretation</p>
+                <h3>What To Look For</h3>
+              </div>
+              <ul id="insightList" class="insight-list"></ul>
+            </article>
+          </section>
         </section>
 
-        <section class="viz-panel">
-          <article class="scenario-card">
-            <div class="scenario-header">
-              <div>
-                <p class="eyebrow">Animated Sample Path</p>
-                <h2 id="sceneTitle">Scenario Playback</h2>
-                <p id="sceneSubtitle" class="scene-subtitle"></p>
-              </div>
-              <div class="scenario-metrics">
-                <span id="playbackStatus" class="metric-pill status-pill" data-mode="idle">Ready</span>
-                <span id="timeReadout" class="metric-pill">t = 0.000</span>
-                <span id="countReadout" class="metric-pill">0 events</span>
-              </div>
+        <section id="backgroundView" class="page-view">
+          <article class="math-page">
+            <div class="math-page-head">
+              <p class="eyebrow">Theory</p>
+              <h2>Mathematical Background</h2>
+              <p>
+                This page summarizes the defining properties, distributional identities, and canonical extensions of
+                the Poisson process family.
+              </p>
             </div>
-            <div id="sceneStage" class="scenario-stage"></div>
+            <div id="backgroundContent" class="math-content"></div>
           </article>
-
-          <div class="summary-cards">
-            <div class="card"><span>Empirical mean</span><strong id="empMean">-</strong></div>
-            <div class="card"><span>Theoretical mean</span><strong id="theoMean">-</strong></div>
-            <div class="card"><span>Empirical variance</span><strong id="empVar">-</strong></div>
-            <div class="card"><span>Theoretical variance</span><strong id="theoVar">-</strong></div>
-          </div>
-
-          <div class="chart-grid">
-            <article class="chart-card">
-              <h3>Sample Path N(t)</h3>
-              <canvas id="pathChart"></canvas>
-            </article>
-            <article class="chart-card">
-              <h3>Count Histogram vs Poisson PMF</h3>
-              <canvas id="histChart"></canvas>
-            </article>
-            <article class="chart-card">
-              <h3>Inter-arrival Distribution</h3>
-              <canvas id="arrivalChart"></canvas>
-            </article>
-          </div>
         </section>
       </main>
     </div>

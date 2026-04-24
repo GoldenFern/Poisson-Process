@@ -1,9 +1,9 @@
-# Poisson Process Visualizer (Random Process Course)
+# Poisson Process Laboratory
 
-This project is a local teaching app for visualizing the Poisson process:
+This project is a local teaching app for exploring the Poisson process family:
 - C++ backend (`cpp-httplib`) for simulation APIs.
-- HTML/CSS/JS frontend for interactive charts.
-- `docs/` for mathematical proofs and case analysis.
+- HTML/CSS/JS frontend for an interactive process lab plus a mathematical background page.
+- `docs/` for API notes and supporting mathematical summaries.
 
 ## 1. Environment checklist
 
@@ -48,11 +48,12 @@ backend/build/poisson_server.exe
 ```
 
 Server default URL:
-- `http://localhost:8080`
+- direct backend runs still default to `http://127.0.0.1:8080`
+- `scripts/start.ps1` instead chooses project-aware high ports and only falls back if needed
 
 Open frontend:
 - directly open `frontend/index.html`, or
-- run `python -m http.server 5500` in project root and visit `http://localhost:5500/frontend/`
+- run `python -m http.server 5500` in project root and visit `http://127.0.0.1:5500/frontend/`
 
 One-click startup (recommended):
 
@@ -60,11 +61,16 @@ One-click startup (recommended):
 powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1
 ```
 
+Notes:
+- `scripts/start.ps1` derives stable high ports from the project path, which avoids the common `8080/5500` collisions across multiple local teaching apps.
+- If the derived ports are busy, the script automatically walks to the next nearby free ports.
+- You can override the defaults manually with `.\scripts\start.ps1 -ApiPort 8081 -FrontendPort 5501`.
+
 ## 4. API overview
 
 - `GET /api/health`
 - `GET /api/cases`
-- `POST /api/simulate/poisson`
+- `POST /api/simulate/process`
 
 See `docs/api.md` for details.
 
@@ -89,7 +95,9 @@ Milestones:
 ## 6. Learning goals
 
 The app demonstrates:
-- independent and stationary increments
-- Poisson distribution of counts
-- exponential inter-arrival times
-- case-driven interpretation in transport, quant, server systems, and physical chemistry
+- the homogeneous Poisson process
+- non-homogeneous Poisson processes with time-varying intensity
+- compound Poisson processes with random jump sizes
+- mixed Poisson processes with latent-rate uncertainty
+- spatial Poisson processes on planar windows
+- a dedicated mathematical background page with rendered formulas

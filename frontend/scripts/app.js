@@ -1,45 +1,64 @@
+import { CASE_CONTENT, buildBackgroundHtml } from "./content.js";
 import {
-  createArrivalChart,
-  createHistogramChart,
-  createPathChart,
-  finishPathPlayback,
-  startPathPlayback,
-  updateArrivalChart,
-  updateHistogramChart,
-  updatePathPlayback,
+  createDiagnosticChart,
+  createDistributionChart,
+  createPrimaryChart,
+  renderDiagnosticChart,
+  renderDistributionChart,
+  renderSpatialPrimary,
+  renderTemporalPrimary,
 } from "./charts.js";
-import { emitSceneEvent, getSceneProfile, resetScene, updateSceneProgress } from "./scenes.js";
 
-const API_BASE = "http://localhost:8080";
+const DEFAULT_API_BASE = "http://127.0.0.1:8080";
+const STARTUP_RETRY_INTERVAL_MS = 750;
+const STARTUP_MAX_ATTEMPTS = 20;
+
+function resolveApiBase() {
+  const params = new URLSearchParams(window.location.search);
+  const apiBase = params.get("apiBase") || DEFAULT_API_BASE;
+  return apiBase.replace(/\/+$/, "");
+}
+
+const API_BASE = resolveApiBase();
 
 const ui = {
-  caseSelect: document.getElementById("caseSelect"),
+  labTab: document.getElementById("labTab"),
+  backgroundTab: document.getElementById("backgroundTab"),
+  labView: document.getElementById("labView"),
+  backgroundView: document.getElementById("backgroundView"),
+  caseCards: document.getElementById("caseCards"),
+  activeCaseLabel: document.getElementById("activeCaseLabel"),
+  activeCaseTitle: document.getElementById("activeCaseTitle"),
+  activeCaseDescription: document.getElementById("activeCaseDescription"),
+  lambdaLabel: document.getElementById("lambdaLabel"),
+  horizonLabel: document.getElementById("horizonLabel"),
+  dtRow: document.getElementById("dtRow"),
+  dtLabel: document.getElementById("dtLabel"),
   lambdaInput: document.getElementById("lambdaInput"),
-  tInput: document.getElementById("tInput"),
+  horizonInput: document.getElementById("tInput"),
   dtInput: document.getElementById("dtInput"),
   trialsInput: document.getElementById("trialsInput"),
   playbackSpeed: document.getElementById("playbackSpeed"),
   simulateButton: document.getElementById("simulateButton"),
   pauseButton: document.getElementById("pauseButton"),
   resetButton: document.getElementById("resetButton"),
-  caseDescription: document.getElementById("caseDescription"),
   healthBlock: document.getElementById("healthBlock"),
-  empMean: document.getElementById("empMean"),
-  theoMean: document.getElementById("theoMean"),
-  empVar: document.getElementById("empVar"),
-  theoVar: document.getElementById("theoVar"),
-  sceneTitle: document.getElementById("sceneTitle"),
-  sceneSubtitle: document.getElementById("sceneSubtitle"),
-  sceneStage: document.getElementById("sceneStage"),
-  playbackStatus: document.getElementById("playbackStatus"),
-  timeReadout: document.getElementById("timeReadout"),
-  countReadout: document.getElementById("countReadout"),
+  statusPill: document.getElementById("statusPill"),
+  progressReadout: document.getElementById("progressReadout"),
+  valueReadout: document.getElementById("valueReadout"),
+  primaryTitle: document.getElementById("primaryTitle"),
+  distributionTitle: document.getElementById("distributionTitle"),
+  diagnosticTitle: document.getElementById("diagnosticTitle"),
+  summaryCards: document.getElementById("summaryCards"),
+  insightList: document.getElementById("insightList"),
+  mathSnippet: document.getElementById("mathSnippet"),
+  backgroundContent: document.getElementById("backgroundContent"),
 };
 
 const charts = {
-  path: createPathChart(document.getElementById("pathChart")),
-  hist: createHistogramChart(document.getElementById("histChart")),
-  arrival: createArrivalChart(document.getElementById("arrivalChart")),
+  primary: createPrimaryChart(document.getElementById("primaryChart")),
+  distribution: createDistributionChart(document.getElementById("distributionChart")),
+  diagnostic: createDiagnosticChart(document.getElementById("diagnosticChart")),
 };
 
 const playbackState = {
@@ -49,102 +68,120 @@ const playbackState = {
   playheadMs: 0,
   lastFrameAt: null,
   chartLastPaintAt: 0,
-  processedArrivals: 0,
-  currentCount: 0,
-  committedStepPoints: [{ t: 0, n: 0 }],
-  durationMs: Number(ui.playbackSpeed.value) || 8000,
+  processedEvents: 0,
+  currentValue: 0,
+  committedPoints: [{ x: 0, y: 0 }],
+  revealedPoints: 0,
+  durationMs: 9000,
   fetchController: null,
 };
 
 let cases = [];
 let activeCase = null;
 
-function renderSummary(summary) {
-  ui.empMean.textContent = summary.empirical_mean_count.toFixed(4);
-  ui.theoMean.textContent = summary.theoretical_mean_count.toFixed(4);
-  ui.empVar.textContent = summary.empirical_variance_count.toFixed(4);
-  ui.theoVar.textContent = summary.theoretical_variance_count.toFixed(4);
+function resolveCaseContent(caseId) {
+  return CASE_CONTENT[caseId] || CASE_CONTENT.homogeneous;
 }
 
-function getRequestPayload() {
-  return {
-    lambda: Number(ui.lambdaInput.value),
-    T: Number(ui.tInput.value),
-    dt: Number(ui.dtInput.value),
-    trials: Number(ui.trialsInput.value),
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function parseApiResponse(response, defaultMessage) {
+  const rawText = await response.text();
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) {
+    const preview = rawText.trim().replace(/\s+/g, " ").slice(0, 140);
+    throw new Error(
+      `${defaultMessage} Expected JSON from ${response.url}, got ${response.status} ${response.statusText}${preview ? `: ${preview}` : ""}`
+    );
+  }
+
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    throw new Error(`${defaultMessage} Invalid JSON returned by ${response.url}.`);
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || `${defaultMessage} HTTP ${response.status}.`);
+  }
+  if (!data.success) {
+    throw new Error(data.error || defaultMessage);
+  }
+  return data;
+}
+
+function formatNumber(value) {
+  const absValue = Math.abs(value);
+  if (absValue >= 1000) {
+    return value.toFixed(1);
+  }
+  if (absValue >= 100) {
+    return value.toFixed(2);
+  }
+  if (absValue >= 10) {
+    return value.toFixed(3);
+  }
+  return value.toFixed(4);
+}
+
+function formatProcessValue(caseId, value) {
+  if (caseId === "compound") {
+    return formatNumber(value);
+  }
+  if (caseId === "spatial") {
+    return String(Math.round(value));
+  }
+  if (Math.abs(value - Math.round(value)) < 1e-9) {
+    return String(Math.round(value));
+  }
+  return formatNumber(value);
+}
+
+function queueMathTypeset(elements) {
+  const nodes = elements.filter(Boolean);
+  const tryTypeset = () => {
+    if (!window.MathJax?.typesetPromise) {
+      window.setTimeout(tryTypeset, 150);
+      return;
+    }
+    window.MathJax.typesetPromise(nodes).catch(() => {});
   };
+  tryTypeset();
 }
 
-function getTimePrecision(horizonT) {
-  if (horizonT < 0.2) {
-    return 4;
+function setView(mode) {
+  const showLab = mode === "lab";
+  ui.labTab.classList.toggle("is-active", showLab);
+  ui.backgroundTab.classList.toggle("is-active", !showLab);
+  ui.labView.classList.toggle("is-active", showLab);
+  ui.backgroundView.classList.toggle("is-active", !showLab);
+
+  if (!showLab) {
+    queueMathTypeset([ui.backgroundContent]);
   }
-  if (horizonT < 1) {
-    return 3;
-  }
-  if (horizonT < 10) {
-    return 2;
-  }
-  return 1;
 }
 
-function formatTime(currentT, horizonT) {
-  const precision = getTimePrecision(horizonT);
-  const unit = getSceneProfile(activeCase?.id || "transport").timeUnit;
-  return `t = ${currentT.toFixed(precision)} / ${horizonT.toFixed(precision)} ${unit}`;
-}
-
-function formatCount(count) {
-  const profile = getSceneProfile(activeCase?.id || "transport");
-  const noun = count === 1 ? profile.nounSingular : profile.nounPlural;
-  return `${count} ${noun}`;
-}
-
-function setPlaybackStatus(label, mode) {
-  ui.playbackStatus.textContent = label;
-  ui.playbackStatus.dataset.mode = mode;
+function setStatus(label, mode) {
+  ui.statusPill.textContent = label;
+  ui.statusPill.dataset.mode = mode;
 }
 
 function syncButtons() {
   const isLoading = playbackState.status === "loading";
   ui.simulateButton.disabled = isLoading;
-  ui.simulateButton.textContent = playbackState.status === "finished" ? "Play Another Path" : isLoading ? "Generating..." : "Play New Path";
   ui.pauseButton.disabled = !(playbackState.status === "playing" || playbackState.status === "paused");
   ui.pauseButton.textContent = playbackState.status === "paused" ? "Resume" : "Pause";
+  ui.simulateButton.textContent = playbackState.status === "finished" ? "Generate New Sample" : isLoading ? "Computing..." : "Generate Sample";
 }
 
-function updatePlaybackReadouts(currentT, horizonT, count) {
-  ui.timeReadout.textContent = formatTime(currentT, horizonT);
-  ui.countReadout.textContent = formatCount(count);
-}
-
-function renderSceneHeader() {
-  if (!activeCase) {
-    return;
-  }
-  const profile = getSceneProfile(activeCase.id);
-  ui.sceneTitle.textContent = activeCase.display_name;
-  ui.sceneSubtitle.textContent = profile.subtitle;
-}
-
-function resetPlaybackPresentation() {
-  const horizonT = Number(ui.tInput.value) || 1;
-  renderSceneHeader();
-  resetScene(ui.sceneStage, activeCase?.id || "transport");
-  startPathPlayback(charts.path, [], horizonT);
-  updatePlaybackReadouts(0, horizonT, 0);
-  updateSceneProgress(ui.sceneStage, 0);
-  if (playbackState.status !== "loading") {
-    setPlaybackStatus("Ready", "idle");
-  }
-  syncButtons();
-}
-
-function abortPendingRequest() {
-  if (playbackState.fetchController) {
-    playbackState.fetchController.abort();
-    playbackState.fetchController = null;
-  }
+function clearChart(chart) {
+  chart.data.labels = [];
+  chart.data.datasets = [];
+  chart.update("none");
 }
 
 function stopPlayback() {
@@ -158,102 +195,281 @@ function stopPlayback() {
   playbackState.playheadMs = 0;
   playbackState.lastFrameAt = null;
   playbackState.chartLastPaintAt = 0;
-  playbackState.processedArrivals = 0;
-  playbackState.currentCount = 0;
-  playbackState.committedStepPoints = [{ t: 0, n: 0 }];
+  playbackState.processedEvents = 0;
+  playbackState.currentValue = 0;
+  playbackState.committedPoints = [{ x: 0, y: 0 }];
+  playbackState.revealedPoints = 0;
 }
 
-function applyCaseDefaults(selected) {
+function abortPendingRequest() {
+  if (playbackState.fetchController) {
+    playbackState.fetchController.abort();
+    playbackState.fetchController = null;
+  }
+}
+
+function renderSummaryMetrics(metrics) {
+  ui.summaryCards.innerHTML = "";
+  for (const metric of metrics) {
+    const card = document.createElement("article");
+    card.className = "summary-card";
+    card.innerHTML = `
+      <span class="metric-label">${metric.label}</span>
+      <strong class="metric-empirical">${formatNumber(metric.empirical_value)}</strong>
+      <span class="metric-theory">Theory: ${formatNumber(metric.theoretical_value)}</span>
+    `;
+    ui.summaryCards.appendChild(card);
+  }
+}
+
+function renderInsights(insights, content) {
+  ui.insightList.innerHTML = "";
+
+  const leadItem = document.createElement("li");
+  leadItem.innerHTML = `<strong>${content.heading}.</strong> ${content.labDescription}`;
+  ui.insightList.appendChild(leadItem);
+
+  for (const insight of insights) {
+    const item = document.createElement("li");
+    item.textContent = insight;
+    ui.insightList.appendChild(item);
+  }
+}
+
+function renderMathSnippet(content) {
+  ui.mathSnippet.innerHTML = content.mathSnippet;
+  queueMathTypeset([ui.mathSnippet]);
+}
+
+function updateReadouts(progressLabel, valueLabel) {
+  ui.progressReadout.textContent = progressLabel;
+  ui.valueReadout.textContent = valueLabel;
+}
+
+function updateLabCopy(casePreset) {
+  const content = resolveCaseContent(casePreset.id);
+  ui.activeCaseLabel.textContent = `${content.badge} Process`;
+  ui.activeCaseTitle.textContent = casePreset.display_name;
+  ui.activeCaseDescription.textContent = casePreset.description;
+  ui.primaryTitle.textContent = content.primaryTitle;
+  ui.distributionTitle.textContent = content.distributionTitle;
+  ui.diagnosticTitle.textContent = content.diagnosticTitle;
+  renderMathSnippet(content);
+}
+
+function updateControlLabels(casePreset) {
+  const content = resolveCaseContent(casePreset.id);
+  ui.lambdaLabel.textContent = content.lambdaLabel;
+  ui.horizonLabel.textContent = content.horizonLabel;
+  ui.dtLabel.textContent = content.dtLabel;
+  ui.dtRow.hidden = !casePreset.uses_dt;
+}
+
+function renderCaseCards() {
+  ui.caseCards.innerHTML = "";
+  for (const casePreset of cases) {
+    const content = resolveCaseContent(casePreset.id);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "case-card";
+    button.dataset.caseId = casePreset.id;
+    button.innerHTML = `
+      <span class="case-badge">${content.badge}</span>
+      <strong>${casePreset.display_name}</strong>
+      <p>${casePreset.teaser}</p>
+    `;
+    button.addEventListener("click", () => selectCase(casePreset.id));
+    ui.caseCards.appendChild(button);
+  }
+}
+
+function highlightActiveCase() {
+  const buttons = ui.caseCards.querySelectorAll(".case-card");
+  buttons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.caseId === activeCase?.id);
+  });
+}
+
+function resetPresentation() {
+  if (!activeCase) {
+    return;
+  }
+
+  const content = resolveCaseContent(activeCase.id);
+  updateLabCopy(activeCase);
+  renderSummaryMetrics([]);
+  renderInsights([], content);
+  clearChart(charts.primary);
+  clearChart(charts.distribution);
+  clearChart(charts.diagnostic);
+
+  if (activeCase.id === "spatial") {
+    updateReadouts("window ready", `0 ${content.valueLabel}`);
+  } else {
+    const horizon = Number(ui.horizonInput.value) || activeCase.defaults.T;
+    updateReadouts(`t = 0.0000 / ${formatNumber(horizon)}`, `0 ${content.valueLabel}`);
+  }
+  setStatus("Ready", "idle");
+  syncButtons();
+}
+
+function selectCase(caseId, options = {}) {
+  const casePreset = cases.find((item) => item.id === caseId);
+  if (!casePreset) {
+    return;
+  }
+
+  const shouldSimulate = options.simulate !== false;
   stopPlayback();
   abortPendingRequest();
 
-  activeCase = selected;
-  ui.lambdaInput.value = selected.defaults.lambda;
-  ui.tInput.value = selected.defaults.T;
-  ui.dtInput.value = selected.defaults.dt;
-  ui.caseDescription.textContent = selected.description;
-  ui.caseSelect.value = selected.id;
-  resetPlaybackPresentation();
+  activeCase = casePreset;
+  ui.lambdaInput.value = casePreset.defaults.lambda;
+  ui.horizonInput.value = casePreset.defaults.T;
+  ui.dtInput.value = casePreset.defaults.dt;
+  updateControlLabels(casePreset);
+  highlightActiveCase();
+  resetPresentation();
+
+  if (shouldSimulate) {
+    playFreshSample();
+  }
 }
 
-async function fetchCases() {
-  const res = await fetch(`${API_BASE}/api/cases`);
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Failed to load case presets.");
-  }
-  cases = data.data.cases;
-
-  ui.caseSelect.innerHTML = "";
-  cases.forEach((c) => {
-    const option = document.createElement("option");
-    option.value = c.id;
-    option.textContent = c.display_name;
-    ui.caseSelect.appendChild(option);
-  });
-
-  if (cases.length > 0) {
-    applyCaseDefaults(cases[0]);
-  }
+function getRequestPayload() {
+  return {
+    case_id: activeCase.id,
+    lambda: Number(ui.lambdaInput.value),
+    T: Number(ui.horizonInput.value),
+    dt: Number(ui.dtInput.value),
+    trials: Number(ui.trialsInput.value),
+  };
 }
 
 async function fetchHealth() {
   const res = await fetch(`${API_BASE}/api/health`);
-  const data = await res.json();
-  if (!data.success) {
-    throw new Error(data.error || "Failed to load health.");
-  }
+  const data = await parseApiResponse(res, "Failed to load backend health.");
   const info = data.data;
   ui.healthBlock.innerHTML =
-    `<strong>Backend:</strong> ${info.service} (${info.status})<br>` +
-    `<strong>Build:</strong> ${info.build_timestamp}<br>` +
-    `<strong>Cases:</strong> ${info.available_cases.join(", ")}`;
+    `<strong>Backend</strong>: ${info.service} (${info.status})<br>` +
+    `<strong>Endpoint</strong>: ${API_BASE}<br>` +
+    `<strong>Build</strong>: ${info.build_timestamp}`;
 }
 
-function beginPlayback(payload) {
-  playbackState.payload = payload;
+async function waitForBackendReady() {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= STARTUP_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await fetchHealth();
+      return;
+    } catch (error) {
+      lastError = error;
+      ui.healthBlock.textContent = `Waiting for backend at ${API_BASE} (${attempt}/${STARTUP_MAX_ATTEMPTS})...`;
+      if (attempt < STARTUP_MAX_ATTEMPTS) {
+        await delay(STARTUP_RETRY_INTERVAL_MS);
+      }
+    }
+  }
+
+  throw lastError || new Error(`Backend at ${API_BASE} did not become ready.`);
+}
+
+async function fetchCases() {
+  const res = await fetch(`${API_BASE}/api/cases`);
+  const data = await parseApiResponse(res, "Failed to load process families.");
+  cases = data.data.cases;
+  renderCaseCards();
+}
+
+function renderDistribution(payload) {
+  const content = resolveCaseContent(activeCase.id);
+  renderDistributionChart(charts.distribution, payload.histogram, {
+    empiricalLabel: "Empirical",
+    theoreticalLabel: "Reference law",
+    xLabel: content.distributionXLabel,
+    yLabel: content.distributionYLabel,
+  });
+}
+
+function renderDiagnostic(payload) {
+  const content = resolveCaseContent(activeCase.id);
+  renderDiagnosticChart(
+    charts.diagnostic,
+    {
+      mode: payload.diagnostic_mode,
+      samples: payload.diagnostic_samples,
+      curve: payload.diagnostic_curve,
+      markers: payload.diagnostic_markers,
+    },
+    {
+      empiricalLabel: payload.diagnostic_mode === "discrete_pmf" ? "Empirical probabilities" : "Empirical density",
+      theoreticalLabel: "Reference law",
+      curveLabel: activeCase.id === "nonhomogeneous" ? "Intensity lambda(t)" : "Reference density",
+      markerLabel: "Sampled latent rate",
+      xLabel: content.diagnosticXLabel,
+      yLabel: content.diagnosticYLabel,
+    }
+  );
+}
+
+function beginTemporalPlayback(payload) {
+  const content = resolveCaseContent(activeCase.id);
+  const horizon = payload.parameters.T;
+
   playbackState.status = "playing";
   playbackState.playheadMs = 0;
   playbackState.lastFrameAt = null;
   playbackState.chartLastPaintAt = 0;
-  playbackState.processedArrivals = 0;
-  playbackState.currentCount = 0;
-  playbackState.committedStepPoints = [{ t: 0, n: 0 }];
-  playbackState.durationMs = Number(ui.playbackSpeed.value) || 8000;
+  playbackState.processedEvents = 0;
+  playbackState.currentValue = 0;
+  playbackState.committedPoints = [{ x: 0, y: 0 }];
+  playbackState.durationMs = Number(ui.playbackSpeed.value) || 9000;
 
-  resetScene(ui.sceneStage, activeCase?.id || "transport");
-  updatePlaybackReadouts(0, payload.parameters.T, 0);
-  setPlaybackStatus("Playing", "playing");
+  renderTemporalPrimary(charts.primary, [{ x: 0, y: 0 }], payload.benchmark_path, {
+    horizon,
+    yLabel: content.primaryYAxis,
+    sampleLabel: content.sampleLabel,
+    benchmarkLabel: content.benchmarkLabel,
+    xLabel: "t",
+  });
+  updateReadouts(`t = 0.0000 / ${formatNumber(horizon)}`, `0 ${content.valueLabel}`);
+  setStatus("Animating", "playing");
   syncButtons();
-
-  startPathPlayback(charts.path, payload.expected_path, payload.parameters.T);
   playbackState.frameId = requestAnimationFrame(stepPlayback);
 }
 
-function processArrivalsUpTo(currentT) {
-  if (!playbackState.payload) {
+function beginSpatialPlayback(payload) {
+  const content = resolveCaseContent(activeCase.id);
+  const sideLength = Math.sqrt(payload.parameters.T);
+
+  playbackState.status = "playing";
+  playbackState.playheadMs = 0;
+  playbackState.lastFrameAt = null;
+  playbackState.chartLastPaintAt = 0;
+  playbackState.revealedPoints = 0;
+  playbackState.durationMs = Number(ui.playbackSpeed.value) || 9000;
+
+  renderSpatialPrimary(charts.primary, [], sideLength, {
+    sampleLabel: content.sampleLabel,
+  });
+  updateReadouts(`revealed 0 / ${payload.spatial_points.length}`, `lambda = ${formatNumber(payload.parameters.lambda)}`);
+  setStatus("Animating", "playing");
+  syncButtons();
+  playbackState.frameId = requestAnimationFrame(stepPlayback);
+}
+
+function beginPlayback(payload) {
+  playbackState.payload = payload;
+  renderDistribution(payload);
+  renderDiagnostic(payload);
+
+  if (payload.primary_mode === "scatter") {
+    beginSpatialPlayback(payload);
     return;
   }
 
-  const arrivals = playbackState.payload.single_path.arrival_times;
-  while (
-    playbackState.processedArrivals < arrivals.length &&
-    arrivals[playbackState.processedArrivals] <= currentT + 1e-9
-  ) {
-    const arrivalTime = arrivals[playbackState.processedArrivals];
-    const nextCount = playbackState.currentCount + 1;
-
-    playbackState.committedStepPoints.push({ t: arrivalTime, n: nextCount - 1 }, { t: arrivalTime, n: nextCount });
-    playbackState.currentCount = nextCount;
-
-    emitSceneEvent(ui.sceneStage, activeCase?.id || "transport", {
-      index: playbackState.processedArrivals,
-      count: nextCount,
-      arrivalTime,
-    });
-
-    playbackState.processedArrivals += 1;
-  }
+  beginTemporalPlayback(payload);
 }
 
 function finishPlayback() {
@@ -261,28 +477,42 @@ function finishPlayback() {
     return;
   }
 
+  const payload = playbackState.payload;
+  const content = resolveCaseContent(activeCase.id);
+
   if (playbackState.frameId) {
     cancelAnimationFrame(playbackState.frameId);
     playbackState.frameId = null;
   }
 
-  const horizonT = playbackState.payload.parameters.T;
-  const finalCount = playbackState.currentCount;
-
   playbackState.status = "finished";
   playbackState.lastFrameAt = null;
   playbackState.playheadMs = playbackState.durationMs;
 
-  updateSceneProgress(ui.sceneStage, 1);
-  updatePlaybackReadouts(horizonT, horizonT, finalCount);
-  setPlaybackStatus("Path complete", "finished");
-  finishPathPlayback(
-    charts.path,
-    playbackState.committedStepPoints,
-    horizonT,
-    finalCount,
-    playbackState.payload.expected_path
-  );
+  if (payload.primary_mode === "scatter") {
+    renderSpatialPrimary(charts.primary, payload.spatial_points, Math.sqrt(payload.parameters.T), {
+      sampleLabel: content.sampleLabel,
+    });
+    updateReadouts(
+      `revealed ${payload.spatial_points.length} / ${payload.spatial_points.length}`,
+      `${payload.spatial_points.length} ${content.valueLabel}`
+    );
+  } else {
+    renderTemporalPrimary(charts.primary, payload.primary_path, payload.benchmark_path, {
+      horizon: payload.parameters.T,
+      yLabel: content.primaryYAxis,
+      sampleLabel: content.sampleLabel,
+      benchmarkLabel: content.benchmarkLabel,
+      xLabel: "t",
+    });
+    const finalValue = payload.primary_path.length > 0 ? payload.primary_path[payload.primary_path.length - 1].y : 0;
+    updateReadouts(
+      `t = ${formatNumber(payload.parameters.T)} / ${formatNumber(payload.parameters.T)}`,
+      `${formatProcessValue(activeCase.id, finalValue)} ${content.valueLabel}`
+    );
+  }
+
+  setStatus("Complete", "finished");
   syncButtons();
 }
 
@@ -291,6 +521,9 @@ function stepPlayback(now) {
     return;
   }
 
+  const payload = playbackState.payload;
+  const content = resolveCaseContent(activeCase.id);
+
   if (playbackState.lastFrameAt === null) {
     playbackState.lastFrameAt = now;
   }
@@ -298,25 +531,54 @@ function stepPlayback(now) {
   const deltaMs = now - playbackState.lastFrameAt;
   playbackState.lastFrameAt = now;
   playbackState.playheadMs = Math.min(playbackState.playheadMs + deltaMs, playbackState.durationMs);
-
-  const horizonT = playbackState.payload.parameters.T;
   const progress = playbackState.durationMs > 0 ? playbackState.playheadMs / playbackState.durationMs : 1;
-  const currentT = horizonT * progress;
 
-  processArrivalsUpTo(currentT);
-  updateSceneProgress(ui.sceneStage, progress);
-  updatePlaybackReadouts(currentT, horizonT, playbackState.currentCount);
+  if (payload.primary_mode === "scatter") {
+    const revealCount = Math.min(payload.spatial_points.length, Math.floor(progress * payload.spatial_points.length));
+    if (revealCount !== playbackState.revealedPoints || now - playbackState.chartLastPaintAt >= 40) {
+      renderSpatialPrimary(charts.primary, payload.spatial_points.slice(0, revealCount), Math.sqrt(payload.parameters.T), {
+        sampleLabel: content.sampleLabel,
+      });
+      playbackState.revealedPoints = revealCount;
+      playbackState.chartLastPaintAt = now;
+    }
+    updateReadouts(`revealed ${revealCount} / ${payload.spatial_points.length}`, `lambda = ${formatNumber(payload.parameters.lambda)}`);
+  } else {
+    const currentT = payload.parameters.T * progress;
+    while (
+      playbackState.processedEvents < payload.event_times.length &&
+      payload.event_times[playbackState.processedEvents] <= currentT + 1e-9
+    ) {
+      const eventTime = payload.event_times[playbackState.processedEvents];
+      const mark = payload.event_marks[playbackState.processedEvents];
+      playbackState.committedPoints.push(
+        { x: eventTime, y: playbackState.currentValue },
+        { x: eventTime, y: playbackState.currentValue + mark }
+      );
+      playbackState.currentValue += mark;
+      playbackState.processedEvents += 1;
+    }
 
-  if (now - playbackState.chartLastPaintAt >= 33 || playbackState.playheadMs >= playbackState.durationMs) {
-    updatePathPlayback(
-      charts.path,
-      playbackState.committedStepPoints,
-      currentT,
-      playbackState.currentCount,
-      horizonT,
-      playbackState.payload.expected_path
+    if (now - playbackState.chartLastPaintAt >= 33 || playbackState.playheadMs >= playbackState.durationMs) {
+      renderTemporalPrimary(
+        charts.primary,
+        [...playbackState.committedPoints, { x: Math.min(currentT, payload.parameters.T), y: playbackState.currentValue }],
+        payload.benchmark_path,
+        {
+          horizon: payload.parameters.T,
+          yLabel: content.primaryYAxis,
+          sampleLabel: content.sampleLabel,
+          benchmarkLabel: content.benchmarkLabel,
+          xLabel: "t",
+        }
+      );
+      playbackState.chartLastPaintAt = now;
+    }
+
+    updateReadouts(
+      `t = ${formatNumber(currentT)} / ${formatNumber(payload.parameters.T)}`,
+      `${formatProcessValue(activeCase.id, playbackState.currentValue)} ${content.valueLabel}`
     );
-    playbackState.chartLastPaintAt = now;
   }
 
   if (playbackState.playheadMs >= playbackState.durationMs) {
@@ -327,32 +589,29 @@ function stepPlayback(now) {
   playbackState.frameId = requestAnimationFrame(stepPlayback);
 }
 
-async function playFreshPath() {
+async function playFreshSample() {
   if (!activeCase) {
     return;
   }
 
   stopPlayback();
   abortPendingRequest();
-  resetPlaybackPresentation();
+  resetPresentation();
 
   const controller = new AbortController();
   playbackState.fetchController = controller;
   playbackState.status = "loading";
-  setPlaybackStatus("Generating new sample...", "loading");
+  setStatus("Generating", "loading");
   syncButtons();
 
   try {
-    const res = await fetch(`${API_BASE}/api/simulate/poisson`, {
+    const res = await fetch(`${API_BASE}/api/simulate/process`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(getRequestPayload()),
       signal: controller.signal,
     });
-    const data = await res.json();
-    if (!data.success) {
-      throw new Error(data.error || "Simulation failed.");
-    }
+    const data = await parseApiResponse(res, "Simulation failed.");
 
     if (playbackState.fetchController !== controller) {
       return;
@@ -360,20 +619,19 @@ async function playFreshPath() {
     playbackState.fetchController = null;
 
     const payload = data.data;
-    renderSummary(payload.summary);
-    updateHistogramChart(charts.hist, payload.histogram);
-    updateArrivalChart(charts.arrival, payload.inter_arrivals, payload.parameters.lambda);
+    renderSummaryMetrics(payload.summary_metrics);
+    renderInsights(payload.insights, resolveCaseContent(activeCase.id));
     beginPlayback(payload);
-  } catch (err) {
-    if (err.name === "AbortError") {
+  } catch (error) {
+    if (error.name === "AbortError") {
       return;
     }
 
     playbackState.fetchController = null;
     playbackState.status = "idle";
-    setPlaybackStatus("Error", "error");
+    setStatus("Error", "error");
     syncButtons();
-    window.alert(err.message);
+    window.alert(error.message);
   }
 }
 
@@ -389,7 +647,7 @@ function togglePause() {
     }
     playbackState.status = "paused";
     playbackState.lastFrameAt = null;
-    setPlaybackStatus("Paused", "paused");
+    setStatus("Paused", "paused");
     syncButtons();
     return;
   }
@@ -397,40 +655,38 @@ function togglePause() {
   if (playbackState.status === "paused") {
     playbackState.status = "playing";
     playbackState.lastFrameAt = null;
-    setPlaybackStatus("Playing", "playing");
+    setStatus("Animating", "playing");
     syncButtons();
     playbackState.frameId = requestAnimationFrame(stepPlayback);
   }
 }
 
 function bindEvents() {
-  ui.caseSelect.addEventListener("change", () => {
-    const selected = cases.find((c) => c.id === ui.caseSelect.value);
-    if (selected) {
-      applyCaseDefaults(selected);
-      playFreshPath();
-    }
-  });
-
-  ui.resetButton.addEventListener("click", () => {
-    if (activeCase) {
-      applyCaseDefaults(activeCase);
-    }
-  });
-
-  ui.simulateButton.addEventListener("click", playFreshPath);
+  ui.labTab.addEventListener("click", () => setView("lab"));
+  ui.backgroundTab.addEventListener("click", () => setView("background"));
+  ui.simulateButton.addEventListener("click", playFreshSample);
   ui.pauseButton.addEventListener("click", togglePause);
+  ui.resetButton.addEventListener("click", () => {
+    if (!activeCase) {
+      return;
+    }
+    selectCase(activeCase.id);
+  });
 }
 
 async function bootstrap() {
   try {
-    await fetchHealth();
-    await fetchCases();
+    ui.backgroundContent.innerHTML = buildBackgroundHtml();
     bindEvents();
-    await playFreshPath();
-  } catch (err) {
-    ui.healthBlock.textContent = `Startup error: ${err.message}`;
-    setPlaybackStatus("Startup error", "error");
+    await waitForBackendReady();
+    await fetchCases();
+    if (cases.length > 0) {
+      selectCase(cases[0].id);
+    }
+    queueMathTypeset([ui.backgroundContent]);
+  } catch (error) {
+    ui.healthBlock.textContent = `Startup error: ${error.message}`;
+    setStatus("Startup error", "error");
   }
 }
 
