@@ -26,7 +26,7 @@ const ui = {
   backgroundTab: document.getElementById("backgroundTab"),
   labView: document.getElementById("labView"),
   backgroundView: document.getElementById("backgroundView"),
-  caseCards: document.getElementById("caseCards"),
+  caseSelect: document.getElementById("caseSelect"),
   activeCaseLabel: document.getElementById("activeCaseLabel"),
   activeCaseTitle: document.getElementById("activeCaseTitle"),
   activeCaseDescription: document.getElementById("activeCaseDescription"),
@@ -265,29 +265,15 @@ function updateControlLabels(casePreset) {
   ui.dtRow.hidden = !casePreset.uses_dt;
 }
 
-function renderCaseCards() {
-  ui.caseCards.innerHTML = "";
+function populateCaseSelect() {
+  ui.caseSelect.innerHTML = "";
   for (const casePreset of cases) {
     const content = resolveCaseContent(casePreset.id);
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "case-card";
-    button.dataset.caseId = casePreset.id;
-    button.innerHTML = `
-      <span class="case-badge">${content.badge}</span>
-      <strong>${casePreset.display_name}</strong>
-      <p>${casePreset.teaser}</p>
-    `;
-    button.addEventListener("click", () => selectCase(casePreset.id));
-    ui.caseCards.appendChild(button);
+    const option = document.createElement("option");
+    option.value = casePreset.id;
+    option.textContent = `${casePreset.display_name} · ${content.badge}`;
+    ui.caseSelect.appendChild(option);
   }
-}
-
-function highlightActiveCase() {
-  const buttons = ui.caseCards.querySelectorAll(".case-card");
-  buttons.forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.caseId === activeCase?.id);
-  });
 }
 
 function resetPresentation() {
@@ -324,11 +310,11 @@ function selectCase(caseId, options = {}) {
   abortPendingRequest();
 
   activeCase = casePreset;
+  ui.caseSelect.value = casePreset.id;
   ui.lambdaInput.value = casePreset.defaults.lambda;
   ui.horizonInput.value = casePreset.defaults.T;
   ui.dtInput.value = casePreset.defaults.dt;
   updateControlLabels(casePreset);
-  highlightActiveCase();
   resetPresentation();
 
   if (shouldSimulate) {
@@ -379,7 +365,7 @@ async function fetchCases() {
   const res = await fetch(`${API_BASE}/api/cases`);
   const data = await parseApiResponse(res, "Failed to load process families.");
   cases = data.data.cases;
-  renderCaseCards();
+  populateCaseSelect();
 }
 
 function renderDistribution(payload) {
@@ -664,6 +650,11 @@ function togglePause() {
 function bindEvents() {
   ui.labTab.addEventListener("click", () => setView("lab"));
   ui.backgroundTab.addEventListener("click", () => setView("background"));
+  ui.caseSelect.addEventListener("change", () => {
+    if (ui.caseSelect.value) {
+      selectCase(ui.caseSelect.value);
+    }
+  });
   ui.simulateButton.addEventListener("click", playFreshSample);
   ui.pauseButton.addEventListener("click", togglePause);
   ui.resetButton.addEventListener("click", () => {
